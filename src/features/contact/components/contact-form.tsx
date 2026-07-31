@@ -10,11 +10,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { contactSchema, type ContactFormValues } from "@/features/contact/schema";
+import { submitContact } from "@/services/api";
 
-type Status = "idle" | "success";
+type Status = "idle" | "success" | "error";
 
 export function ContactForm() {
   const [status, setStatus] = React.useState<Status>("idle");
+  const [errorMsg, setErrorMsg] = React.useState("");
 
   const {
     register,
@@ -26,13 +28,15 @@ export function ContactForm() {
     defaultValues: { name: "", email: "", message: "" },
   });
 
-  // Backend wiring lands in a later phase — simulate the request for now.
   const onSubmit = async (values: ContactFormValues) => {
-    await new Promise((resolve) => setTimeout(resolve, 900));
-    // eslint-disable-next-line no-console
-    console.info("Contact submission", values);
-    reset();
-    setStatus("success");
+    try {
+      await submitContact(values);
+      reset();
+      setStatus("success");
+    } catch (err) {
+      setErrorMsg(err instanceof Error ? err.message : "Something went wrong. Please try again.");
+      setStatus("error");
+    }
   };
 
   if (status === "success") {
@@ -48,6 +52,20 @@ export function ContactForm() {
         </p>
         <Button variant="outline" onClick={() => setStatus("idle")}>
           Send another message
+        </Button>
+      </div>
+    );
+  }
+
+  if (status === "error") {
+    return (
+      <div
+        role="alert"
+        className="flex flex-col items-center gap-3 rounded-xl border border-destructive/40 bg-destructive/10 p-10 text-center"
+      >
+        <p className="text-sm text-destructive">{errorMsg}</p>
+        <Button variant="outline" onClick={() => setStatus("idle")}>
+          Try again
         </Button>
       </div>
     );

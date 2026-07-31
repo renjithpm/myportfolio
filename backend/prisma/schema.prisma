@@ -1,0 +1,374 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Existing models ─────────────────────────────────────────────────────────
+model ContactSubmission {
+  id        String   @id @default(cuid())
+  name      String
+  email     String
+  message   String
+  createdAt DateTime @default(now())
+
+  @@map("contact_submissions")
+}
+
+model CacheEntry {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  data      Json
+  expiresAt DateTime
+
+  @@map("cache_entries")
+}
+
+// ─── Auth / Users ─────────────────────────────────────────────────────────────
+model User {
+  id            String         @id @default(cuid())
+  email         String         @unique
+  passwordHash  String
+  name          String
+  avatar        String?
+  role          Role           @default(USER)
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  purchases     Purchase[]
+  subscriptions Subscription[]
+  progress      UserProgress[]
+  bookmarks     Bookmark[]
+  downloads     Download[]
+  refreshTokens RefreshToken[]
+
+  @@map("users")
+}
+
+model RefreshToken {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@map("refresh_tokens")
+}
+
+enum Role {
+  USER
+  ADMIN
+}
+
+// ─── Content ──────────────────────────────────────────────────────────────────
+model Category {
+  id              String          @id @default(cuid())
+  name            String          @unique
+  slug            String          @unique
+  description     String?
+  imageUrl        String?
+  courses         Course[]
+  offerCategories OfferCategory[]
+  createdAt       DateTime        @default(now())
+
+  @@map("categories")
+}
+
+model Tag {
+  id      String      @id @default(cuid())
+  name    String      @unique
+  slug    String      @unique
+  courses CourseTag[]
+
+  @@map("tags")
+}
+
+model Course {
+  id               String         @id @default(cuid())
+  title            String
+  subtitle         String?
+  slug             String         @unique
+  description      String
+  shortDescription String?
+  thumbnail        String?
+  bannerImage      String?
+  instructor       String
+  difficulty       Difficulty     @default(BEGINNER)
+  durationHours    Float          @default(0)
+  language         String         @default("English")
+  price            Float          @default(0)
+  discountPrice    Float?
+  currency         String         @default("AED")
+  isFree           Boolean        @default(false)
+  isFeatured       Boolean        @default(false)
+  isBestseller     Boolean        @default(false)
+  status           CourseStatus   @default(DRAFT)
+  courseOrder      Int            @default(0)
+  seoTitle         String?
+  seoDescription   String?
+  categoryId       String?
+  category         Category?      @relation(fields: [categoryId], references: [id])
+  tags             CourseTag[]
+  modules          CourseModule[]
+  purchases        Purchase[]
+  bookmarks        Bookmark[]
+  planCourses      PlanCourse[]
+  offerCourses     OfferCourse[]
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+
+  @@map("courses")
+}
+
+enum Difficulty {
+  BEGINNER
+  INTERMEDIATE
+  ADVANCED
+}
+
+enum CourseStatus {
+  DRAFT
+  PUBLISHED
+}
+
+model CourseTag {
+  courseId String
+  tagId    String
+  course   Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  tag      Tag    @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([courseId, tagId])
+  @@map("course_tags")
+}
+
+model CourseModule {
+  id          String   @id @default(cuid())
+  title       String
+  description String?
+  order       Int
+  courseId    String
+  course      Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  lessons     Lesson[]
+  createdAt   DateTime @default(now())
+
+  @@map("course_modules")
+}
+
+model Lesson {
+  id              String         @id @default(cuid())
+  title           String
+  description     String?
+  type            LessonType
+  durationMinutes Int?
+  resourceUrl     String?
+  downloadAllowed Boolean        @default(false)
+  previewEnabled  Boolean        @default(false)
+  order           Int
+  moduleId        String
+  module          CourseModule   @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+  progress        UserProgress[]
+  downloads       Download[]
+  createdAt       DateTime       @default(now())
+
+  @@map("lessons")
+}
+
+enum LessonType {
+  VIDEO
+  PDF
+  ARTICLE
+  DOWNLOADABLE
+  EXTERNAL_LINK
+}
+
+// ─── Payments & Subscriptions ─────────────────────────────────────────────────
+model Purchase {
+  id            String         @id @default(cuid())
+  userId        String
+  courseId      String
+  amount        Float
+  currency      String         @default("AED")
+  status        PurchaseStatus @default(PENDING)
+  provider      String?
+  transactionId String?
+  invoiceNumber String         @unique
+  couponId      String?
+  purchasedAt   DateTime?
+  expiresAt     DateTime?
+  refundedAt    DateTime?
+  user          User           @relation(fields: [userId], references: [id])
+  course        Course         @relation(fields: [courseId], references: [id])
+  coupon        Coupon?        @relation(fields: [couponId], references: [code])
+  createdAt     DateTime       @default(now())
+
+  @@map("purchases")
+}
+
+enum PurchaseStatus {
+  PENDING
+  PAID
+  FAILED
+  REFUNDED
+}
+
+model SubscriptionPlan {
+  id              String         @id @default(cuid())
+  name            String         @unique
+  tier            PlanTier
+  monthlyPrice    Float
+  annualPrice     Float
+  downloadAllowed Boolean        @default(false)
+  premiumAccess   Boolean        @default(false)
+  description     String?
+  features        String[]
+  subscriptions   Subscription[]
+  planCourses     PlanCourse[]
+  createdAt       DateTime       @default(now())
+
+  @@map("subscription_plans")
+}
+
+enum PlanTier {
+  FREE
+  BASIC
+  PRO
+  PREMIUM
+}
+
+model PlanCourse {
+  planId   String
+  courseId String
+  plan     SubscriptionPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+  course   Course           @relation(fields: [courseId], references: [id], onDelete: Cascade)
+
+  @@id([planId, courseId])
+  @@map("plan_courses")
+}
+
+model Subscription {
+  id           String           @id @default(cuid())
+  userId       String
+  planId       String
+  billingCycle BillingCycle
+  status       SubStatus        @default(ACTIVE)
+  provider     String?
+  externalId   String?
+  startedAt    DateTime         @default(now())
+  expiresAt    DateTime?
+  cancelledAt  DateTime?
+  autoRenew    Boolean          @default(true)
+  user         User             @relation(fields: [userId], references: [id])
+  plan         SubscriptionPlan @relation(fields: [planId], references: [id])
+
+  @@map("subscriptions")
+}
+
+enum BillingCycle {
+  MONTHLY
+  ANNUAL
+}
+
+enum SubStatus {
+  ACTIVE
+  CANCELLED
+  EXPIRED
+}
+
+// ─── Offers & Coupons ─────────────────────────────────────────────────────────
+model Offer {
+  id              String          @id @default(cuid())
+  name            String
+  offerType       OfferType
+  percentDiscount Float?
+  fixedDiscount   Float?
+  startDate       DateTime
+  endDate         DateTime
+  maxUses         Int?
+  usedCount       Int             @default(0)
+  isActive        Boolean         @default(true)
+  offerCourses    OfferCourse[]
+  offerCategories OfferCategory[]
+  createdAt       DateTime        @default(now())
+
+  @@map("offers")
+}
+
+enum OfferType {
+  PERCENTAGE
+  FIXED
+}
+
+model OfferCourse {
+  offerId  String
+  courseId String
+  offer    Offer  @relation(fields: [offerId], references: [id], onDelete: Cascade)
+  course   Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
+
+  @@id([offerId, courseId])
+  @@map("offer_courses")
+}
+
+model OfferCategory {
+  offerId    String
+  categoryId String
+  offer      Offer    @relation(fields: [offerId], references: [id], onDelete: Cascade)
+  category   Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@id([offerId, categoryId])
+  @@map("offer_categories")
+}
+
+model Coupon {
+  code              String     @id
+  percentDiscount   Float?
+  fixedDiscount     Float?
+  expiresAt         DateTime?
+  usageLimit        Int?
+  perUserLimit      Int        @default(1)
+  minPurchaseAmount Float?
+  isActive          Boolean    @default(true)
+  usedCount         Int        @default(0)
+  purchases         Purchase[]
+  createdAt         DateTime   @default(now())
+
+  @@map("coupons")
+}
+
+// ─── Progress & Engagement ────────────────────────────────────────────────────
+model UserProgress {
+  id          String    @id @default(cuid())
+  userId      String
+  lessonId    String
+  completed   Boolean   @default(false)
+  completedAt DateTime?
+  user        User      @relation(fields: [userId], references: [id])
+  lesson      Lesson    @relation(fields: [lessonId], references: [id])
+
+  @@unique([userId, lessonId])
+  @@map("user_progress")
+}
+
+model Bookmark {
+  userId    String
+  courseId  String
+  user      User     @relation(fields: [userId], references: [id])
+  course    Course   @relation(fields: [courseId], references: [id])
+  createdAt DateTime @default(now())
+
+  @@id([userId, courseId])
+  @@map("bookmarks")
+}
+
+model Download {
+  id        String   @id @default(cuid())
+  userId    String
+  lessonId  String
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id])
+  lesson    Lesson   @relation(fields: [lessonId], references: [id])
+
+  @@map("downloads")
+}
